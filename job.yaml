@@ -1,0 +1,42 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: sysbench
+  namespace: staging
+  labels:
+    job: sysbench
+spec:
+  backoffLimit: 3 # default is 6
+  activeDeadlineSeconds: 3600 # 1 hour. Once a Job reaches activeDeadlineSeconds, all of its running Pods are terminated and the Job status will become type: Failed with reason: DeadlineExceeded. Ref: https://kubernetes.io/docs/concepts/workloads/controllers/job/#job-termination-and-cleanup
+  ttlSecondsAfterFinished: 100 # automatically delete the job after completion. Ref: https://kubernetes.io/docs/concepts/workloads/controllers/job/#ttl-mechanism-for-finished-jobs
+  template:
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: "env" # match with node's label
+                    operator: In
+                    values:
+                      - "staging"
+                  - key: "unmanaged-node" # match with node's label
+                    operator: In
+                    values:
+                      - "true"
+      tolerations: # match with node's taint
+        - key: "staging-only"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"
+      containers:
+        - image: koldraj/sysbench
+          name: sysbench
+          resources:
+            requests:
+              cpu: 500m # CPU unit. 1 CPU unit in K8s is 1 AWS vCPU. m3.xlarge has 4 vCPU, c4.xlarge has 4 vCPU: https://kubernetes.io/docs/tasks/configure-pod-container/assign-cpu-resource/#cpu-units
+              memory: "50Mi"
+            limits:
+              cpu: 1000m # past CPU usage on DD: https://app.datadoghq.com/dash/integration/30322/Kubernetes%20Pods%20Overview?fullscreen_end_ts=1630665547482&fullscreen_paused=false&fullscreen_section=overview&fullscreen_start_ts=1628073547482&fullscreen_widget=1565688625897228&tpl_var_cluster=eks-ue1-prod-peerwell-api-infra&tpl_var_host=i-01989f1cbb9564397&tpl_var_job=create-daily-rehab%2A&tpl_var_kube_cluster_name=eks-ue1-prod-peerwell-api-infra&tpl_var_kube_cronjob=send-program-messages&tpl_var_kube_job=send-program-messages-1630658100&tpl_var_kube_namespace=prod&tpl_var_namespace=prod&from_ts=1628069282209&to_ts=1630661282209&live=true
+              memory: "300Mi" # past memory usage on DD: https://app.datadoghq.com/dash/integration/30322/Kubernetes%20Pods%20Overview?fullscreen_end_ts=1630665575197&fullscreen_paused=false&fullscreen_section=overview&fullscreen_start_ts=1628073575197&fullscreen_widget=6589391191734594&tpl_var_cluster=eks-ue1-prod-peerwell-api-infra&tpl_var_host=i-01989f1cbb9564397&tpl_var_job=create-daily-rehab%2A&tpl_var_kube_cluster_name=eks-ue1-prod-peerwell-api-infra&tpl_var_kube_cronjob=send-program-messages&tpl_var_kube_job=send-program-messages-1630658100&tpl_var_kube_namespace=prod&tpl_var_namespace=prod&from_ts=1628069282209&to_ts=1630661282209&live=true
+      restartPolicy: Never
